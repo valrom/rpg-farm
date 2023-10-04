@@ -10,5 +10,6 @@ winit = "*"
 env_logger = "*"
 log = "*"
 wgpu = "*"
-tokio = {version = "*", features = ["full"]}
+tokio = { version = "*", features = ["full"] }
 bytemuck = { version = "*", features = ["derive"] }
+image = { version = "*", features = ["png", "jpeg"] }

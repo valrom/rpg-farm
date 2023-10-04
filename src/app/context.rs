@@ -1,9 +1,9 @@
+use std::default::Default;
+use image::GenericImageView;
 use wgpu::{PowerPreference, RequestAdapterOptions};
 use winit::window::Window;
-use crate::app::buffers::{Vertex, VERTICES};
-use super::buffers;
+use crate::app::buffers;
 
-#[derive()]
 pub struct Context {
     window: Window,
 
@@ -17,6 +17,9 @@ pub struct Context {
     second_pipeline: wgpu::RenderPipeline,
 
     vertex_buffer: wgpu::Buffer,
+    index_buffer: wgpu::Buffer,
+    texture: wgpu::Texture,
+    bind_group: wgpu::BindGroup,
 
     pub is_render_first: bool,
 }
@@ -60,22 +63,38 @@ impl Context {
             wgpu::include_wgsl!("color_shader.wgsl")
         );
 
-        let first_pipeline = Context::create_render_pipeline(
-            &device,
-            &config,
-            first_shader,
-        );
-
-        let second_pipeline = Context::create_render_pipeline(
-            &device,
-            &config,
-            second_shader,
-        );
-
         let vertex_buffer = buffers::create_vertex_buffer(
             &device,
             bytemuck::cast_slice(buffers::VERTICES),
         );
+
+        let index_buffer = buffers::create_index_buffer(
+            &device,
+            bytemuck::cast_slice(buffers::INDICES),
+        );
+
+        let texture = Self::create_texture(&device, &queue);
+        let layout = Self::create_bind_group_layout(&device);
+
+        let bind_group = Self::create_diffuse_bind_group(
+            &device,
+            &texture,
+            &layout,
+        );
+
+        let first_pipeline = Context::create_render_pipeline(
+            &device,
+            &config,
+            first_shader,
+            &[&layout]
+        );
+        let second_pipeline = Context::create_render_pipeline(
+            &device,
+            &config,
+            second_shader,
+            &[&layout]
+        );
+
 
         Context {
             window,
@@ -87,7 +106,10 @@ impl Context {
             first_pipeline,
             second_pipeline,
             vertex_buffer,
+            index_buffer,
             is_render_first: false,
+            texture,
+            bind_group,
         }
     }
 
@@ -144,8 +166,13 @@ impl Context {
                 render_pass.set_pipeline(&self.second_pipeline);
             }
 
+            render_pass.set_bind_group(0, &self.bind_group, &[]);
             render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
-            render_pass.draw(0..VERTICES.len() as u32, 0..1);
+            render_pass.set_index_buffer(
+                self.index_buffer.slice(..),
+                wgpu::IndexFormat::Uint16,
+            );
+            render_pass.draw_indexed(0..buffers::INDICES.len() as u32, 0, 0..1);
         }
 
         self.queue.submit(std::iter::once(encoder.finish()));
@@ -158,11 +185,12 @@ impl Context {
         device: &wgpu::Device,
         config: &wgpu::SurfaceConfiguration,
         shader: wgpu::ShaderModule,
+        bind_groups: &[&wgpu::BindGroupLayout],
     ) -> wgpu::RenderPipeline {
         let pipeline_layout = device.create_pipeline_layout(
             &wgpu::PipelineLayoutDescriptor {
                 label: Some("Render pipeline"),
-                bind_group_layouts: &[],
+                bind_group_layouts: bind_groups,
                 push_constant_ranges: &[],
             }
         );
@@ -176,7 +204,7 @@ impl Context {
         let vertex_state = wgpu::VertexState {
             module: &shader,
             entry_point: "vs_main",
-            buffers: &[Vertex::desc()],
+            buffers: &[buffers::Vertex::desc()],
         };
 
         let fragment_state = wgpu::FragmentState {
@@ -211,6 +239,124 @@ impl Context {
                 multiview: None,
             }
         )
+    }
+
+    fn create_texture(device: &wgpu::Device, queue: &wgpu::Queue) -> wgpu::Texture {
+        let diffuse_bytes = include_bytes!("stone.jpeg");
+        let diffuse_image = image::load_from_memory(diffuse_bytes).unwrap();
+        let diffuse_rgba = diffuse_image.to_rgba8();
+
+        let dimensions = diffuse_rgba.dimensions();
+
+        let texture_size = wgpu::Extent3d {
+            width: dimensions.0,
+            height: dimensions.1,
+            depth_or_array_layers: 1,
+        };
+
+
+        let desc = wgpu::TextureDescriptor {
+            size: texture_size,
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rgba8UnormSrgb,
+
+            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+            label: Some("Stone texture"),
+            view_formats: &[],
+        };
+
+        let texture = device.create_texture(&desc);
+
+        queue.write_texture(
+            wgpu::ImageCopyTexture {
+                texture: &texture,
+                mip_level: 0,
+                origin: wgpu::Origin3d::ZERO,
+                aspect: wgpu::TextureAspect::All,
+            },
+            &diffuse_rgba,
+            wgpu::ImageDataLayout {
+                offset: 0,
+                bytes_per_row: Some(4 * dimensions.0),
+                rows_per_image: Some(dimensions.1),
+            },
+            texture_size,
+        );
+
+        texture
+    }
+
+    fn create_bind_group_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
+        let fragment = wgpu::ShaderStages::FRAGMENT;
+
+        let first_entry = wgpu::BindGroupLayoutEntry {
+            binding: 0,
+            visibility: fragment,
+            ty: wgpu::BindingType::Texture {
+                multisampled: false,
+                view_dimension: wgpu::TextureViewDimension::D2,
+                sample_type: wgpu::TextureSampleType::Float { filterable: true },
+            },
+            count: None,
+        };
+
+        let second_entry = wgpu::BindGroupLayoutEntry {
+            binding: 1,
+            visibility: fragment,
+            ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+            count: None,
+        };
+
+        device.create_bind_group_layout(
+            &wgpu::BindGroupLayoutDescriptor {
+                label: Some("texture_bind_group_layout"),
+                entries: &[first_entry, second_entry],
+            }
+        )
+    }
+
+    fn create_diffuse_bind_group(
+        device: &wgpu::Device,
+        texture: &wgpu::Texture,
+        layout: &wgpu::BindGroupLayout,
+    ) -> wgpu::BindGroup {
+        let texture_view = texture.create_view(
+            &wgpu::TextureViewDescriptor::default()
+        );
+
+        let edge = wgpu::AddressMode::ClampToEdge;
+
+        let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+            address_mode_u: edge,
+            address_mode_v: edge,
+            address_mode_w: edge,
+
+            mag_filter: wgpu::FilterMode::Linear,
+            min_filter: wgpu::FilterMode::Nearest,
+
+            mipmap_filter: wgpu::FilterMode::Nearest,
+
+            ..Default::default()
+        });
+
+        let desc = wgpu::BindGroupDescriptor {
+            layout: &layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&texture_view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&sampler),
+                }
+            ],
+            label: Some("Bind Group"),
+        };
+
+        device.create_bind_group(&desc)
     }
 }
 
