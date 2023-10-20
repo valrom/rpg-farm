@@ -1,8 +1,9 @@
 use std::default::Default;
-use image::GenericImageView;
 use wgpu::{PowerPreference, RequestAdapterOptions};
+use wgpu::util::DeviceExt;
 use winit::window::Window;
 use crate::app::buffers;
+use crate::app::camera::{Camera, CameraUniform};
 
 pub struct Context {
     window: Window,
@@ -22,6 +23,8 @@ pub struct Context {
     bind_group: wgpu::BindGroup,
 
     pub is_render_first: bool,
+    pub camera: Camera,
+    camera_uniform: CameraUniform,
 }
 
 
@@ -74,7 +77,8 @@ impl Context {
         );
 
         let texture = Self::create_texture(&device, &queue);
-        let layout = Self::create_bind_group_layout(&device);
+        let layout = Self::create_texture_bind_group_layout(&device);
+        let camera_layout = CameraUniform::bind_group_layout(&device);
 
         let bind_group = Self::create_diffuse_bind_group(
             &device,
@@ -86,14 +90,26 @@ impl Context {
             &device,
             &config,
             first_shader,
-            &[&layout]
+            &[&layout, &camera_layout]
         );
         let second_pipeline = Context::create_render_pipeline(
             &device,
             &config,
             second_shader,
-            &[&layout]
+            &[&layout, &camera_layout]
         );
+
+        let camera = Camera {
+            eye: (0.0, 1.0, 2.0).into(),
+            target: (0.0, 0.0, 0.0).into(),
+            up: cgmath::Vector3::unit_y(),
+            aspect: config.width as f32 / config.height as f32,
+            fov_y: 45.0,
+            z_near: 0.1,
+            z_far: 100.0,
+        };
+
+        let camera_uniform = CameraUniform::new(&device);
 
 
         Context {
@@ -110,6 +126,8 @@ impl Context {
             is_render_first: false,
             texture,
             bind_group,
+            camera,
+            camera_uniform
         }
     }
 
@@ -133,6 +151,10 @@ impl Context {
         let view = output.texture.create_view(
             &wgpu::TextureViewDescriptor::default()
         );
+
+        self.camera.aspect = self.config.width as f32 / self.config.height as f32;
+
+        self.camera_uniform.update_matrix(&self.camera, &self.queue);
 
         let mut encoder = self.device.create_command_encoder(
             &wgpu::CommandEncoderDescriptor {
@@ -167,6 +189,7 @@ impl Context {
             }
 
             render_pass.set_bind_group(0, &self.bind_group, &[]);
+            render_pass.set_bind_group(1, &self.camera_uniform.bind_group, &[]);
             render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
             render_pass.set_index_buffer(
                 self.index_buffer.slice(..),
@@ -288,7 +311,7 @@ impl Context {
         texture
     }
 
-    fn create_bind_group_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
+    fn create_texture_bind_group_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
         let fragment = wgpu::ShaderStages::FRAGMENT;
 
         let first_entry = wgpu::BindGroupLayoutEntry {

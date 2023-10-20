@@ -1,6 +1,8 @@
 pub mod context;
 pub mod buffers;
+mod camera;
 
+use image::imageops::contrast;
 use winit::{
     event::*,
     event_loop::{ControlFlow, EventLoopWindowTarget},
@@ -12,13 +14,15 @@ use context::Context;
 
 pub struct App {
     context : Context,
+    pub camera_angles: cgmath::Point2<f32>,
 }
 
 
 impl App {
     pub async fn new(window: Window) -> Self {
         Self {
-            context: Context::new(window).await
+            context: Context::new(window).await,
+            camera_angles: cgmath::Point2::new(0.0, 0.0),
         }
     }
 
@@ -34,12 +38,20 @@ impl App {
             } if window_id == self.context.window().id() => self.handle_window_event(event, control_flow),
             
             Event::RedrawRequested(window_id) if window_id == self.context.window().id() => {
+                self.context.camera.set_angles(self.camera_angles);
                 self.context.render().unwrap();
             }
             
             Event::MainEventsCleared => {
                 self.context.window().request_redraw();
             }
+
+            Event::DeviceEvent {
+                event,
+                ..
+            } => {
+                self.handle_device_event(event, control_flow);
+            },
             
             _ => {},
         }
@@ -64,21 +76,35 @@ impl App {
             _ => {},
         }
     }
+
+    fn handle_device_event(&mut self, event: DeviceEvent, control_flow: &mut ControlFlow) {
+        match event {
+            DeviceEvent::MouseMotion {
+                delta
+            } => {
+                self.camera_angles += (delta.0 as f32 / 10.0, delta.1 as f32  / 10.0).into();
+            },
+
+            _ => {}
+        }
+    }
     
     fn input(&mut self, event: &WindowEvent) -> bool {
-        
-        if let WindowEvent::KeyboardInput {
-            input: KeyboardInput {
-                virtual_keycode: Some(VirtualKeyCode::Space),
-                state: ElementState::Released,
+
+        match event {
+            WindowEvent::KeyboardInput {
+                input: KeyboardInput {
+                    virtual_keycode: Some(VirtualKeyCode::Space),
+                    state: ElementState::Released,
+                    ..
+                },
                 ..
+            } => {
+                self.context.is_render_first = !self.context.is_render_first;
+                true
             },
-            ..
-        } = *event {
-            self.context.is_render_first = !self.context.is_render_first;
-            true
-        } else {
-            false
+
+            _ => false
         }
     }
 }

@@ -13,3 +13,4 @@ wgpu = "*"
 tokio = { version = "*", features = ["full"] }
 bytemuck = { version = "*", features = ["derive"] }
 image = { version = "*", features = ["png", "jpeg"] }
+cgmath = "*"
