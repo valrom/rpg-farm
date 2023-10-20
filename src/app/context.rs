@@ -1,8 +1,8 @@
 use std::default::Default;
 use wgpu::{PowerPreference, RequestAdapterOptions};
-use wgpu::util::DeviceExt;
 use winit::window::Window;
 use crate::app::buffers;
+use crate::app::buffers::{DrawMesh, INDICES, Mesh, VERTICES};
 use crate::app::camera::{Camera, CameraUniform};
 
 pub struct Context {
@@ -17,8 +17,8 @@ pub struct Context {
     first_pipeline: wgpu::RenderPipeline,
     second_pipeline: wgpu::RenderPipeline,
 
-    vertex_buffer: wgpu::Buffer,
-    index_buffer: wgpu::Buffer,
+    mesh: Mesh,
+
     texture: wgpu::Texture,
     bind_group: wgpu::BindGroup,
 
@@ -66,15 +66,9 @@ impl Context {
             wgpu::include_wgsl!("color_shader.wgsl")
         );
 
-        let vertex_buffer = buffers::create_vertex_buffer(
-            &device,
-            bytemuck::cast_slice(buffers::VERTICES),
-        );
+        let mesh = Mesh::new(&device, VERTICES, INDICES);
 
-        let index_buffer = buffers::create_index_buffer(
-            &device,
-            bytemuck::cast_slice(buffers::INDICES),
-        );
+
 
         let texture = Self::create_texture(&device, &queue);
         let layout = Self::create_texture_bind_group_layout(&device);
@@ -121,8 +115,7 @@ impl Context {
             size,
             first_pipeline,
             second_pipeline,
-            vertex_buffer,
-            index_buffer,
+            mesh,
             is_render_first: false,
             texture,
             bind_group,
@@ -190,12 +183,9 @@ impl Context {
 
             render_pass.set_bind_group(0, &self.bind_group, &[]);
             render_pass.set_bind_group(1, &self.camera_uniform.bind_group, &[]);
-            render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
-            render_pass.set_index_buffer(
-                self.index_buffer.slice(..),
-                wgpu::IndexFormat::Uint16,
-            );
-            render_pass.draw_indexed(0..buffers::INDICES.len() as u32, 0, 0..1);
+
+            render_pass.draw_mesh(&self.mesh);
+
         }
 
         self.queue.submit(std::iter::once(encoder.finish()));

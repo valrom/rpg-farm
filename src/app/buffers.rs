@@ -1,13 +1,5 @@
 use wgpu::util::DeviceExt;
 
-#[repr(C)]
-#[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
-pub struct Vertex {
-    position: [f32; 3],
-    tex_coords: [f32; 2],
-}
-
-
 pub const VERTICES: &[Vertex] = &[
     Vertex { position: [-0.5, 0.5, 0.0], tex_coords: [0.0, 0.0] },
     Vertex { position: [0.5, 0.5, 0.0], tex_coords: [1.0, 0.0] },
@@ -20,24 +12,59 @@ pub const INDICES: &[u16] = &[
     1, 2, 3
 ];
 
-pub fn create_vertex_buffer(device: &wgpu::Device, slice: &[u8]) -> wgpu::Buffer {
-    let desc = wgpu::util::BufferInitDescriptor {
-        label: Some("Main buffer"),
-        usage: wgpu::BufferUsages::VERTEX,
-        contents: slice,
-    };
 
-    device.create_buffer_init(&desc)
+#[repr(C)]
+#[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct Vertex {
+    position: [f32; 3],
+    tex_coords: [f32; 2],
 }
 
-pub fn create_index_buffer(device: &wgpu::Device, slice: &[u8]) -> wgpu::Buffer {
-    let desc = wgpu::util::BufferInitDescriptor {
-        label: Some("Main index buffer"),
-        usage: wgpu::BufferUsages::INDEX,
-        contents: slice,
-    };
+pub struct Mesh {
+    vertex_buffer: wgpu::Buffer,
+    index_buffer: wgpu::Buffer,
+    len: u32,
+}
 
-    device.create_buffer_init(&desc)
+impl Mesh {
+    pub fn new(device: &wgpu::Device, vertices: &[Vertex], indices: &[u16]) -> Self {
+
+        let vertex_buffer = Self::create_vertex_buffer(
+            device,
+            bytemuck::cast_slice(vertices)
+        );
+
+        let index_buffer = Self::create_index_buffer(
+            device,
+            bytemuck::cast_slice(indices)
+        );
+
+        Self {
+            vertex_buffer,
+            index_buffer,
+            len: indices.len() as u32,
+        }
+    }
+
+    fn create_vertex_buffer(device: &wgpu::Device, slice: &[u8]) -> wgpu::Buffer {
+        let desc = wgpu::util::BufferInitDescriptor {
+            label: Some("Main buffer"),
+            usage: wgpu::BufferUsages::VERTEX,
+            contents: slice,
+        };
+
+        device.create_buffer_init(&desc)
+    }
+
+    fn create_index_buffer(device: &wgpu::Device, slice: &[u8]) -> wgpu::Buffer {
+        let desc = wgpu::util::BufferInitDescriptor {
+            label: Some("Main index buffer"),
+            usage: wgpu::BufferUsages::INDEX,
+            contents: slice,
+        };
+
+        device.create_buffer_init(&desc)
+    }
 }
 
 impl Vertex {
@@ -60,5 +87,21 @@ impl Vertex {
             step_mode: wgpu::VertexStepMode::Vertex,
             attributes: &ATTRIBUTES,
         }
+    }
+}
+
+pub trait DrawMesh<'a> {
+    fn draw_mesh(&mut self, mesh: &'a Mesh);
+}
+
+impl<'a, 'b> DrawMesh<'b> for wgpu::RenderPass<'a>
+where 'b : 'a {
+    fn draw_mesh(&mut self, mesh: &'b Mesh) {
+        self.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
+        self.set_index_buffer(
+            mesh.index_buffer.slice(..),
+            wgpu::IndexFormat::Uint16
+        );
+        self.draw_indexed(0..mesh.len, 0, 0..1);
     }
 }

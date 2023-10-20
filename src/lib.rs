@@ -8,6 +8,8 @@ use winit::{
     window::WindowBuilder,
 };
 
+// TODO: Separate rendering. To commands
+
 
 pub async fn run() {
     env_logger::init();
