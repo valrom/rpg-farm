@@ -2,7 +2,7 @@ use std::default::Default;
 use wgpu::{PowerPreference, RequestAdapterOptions};
 use winit::window::Window;
 use crate::app::buffers;
-use crate::app::buffers::{DrawMesh, INDICES, Mesh, VERTICES};
+use crate::app::buffers::{ INDICES, Mesh, VERTICES};
 use crate::app::camera::{Camera, CameraUniform};
 
 pub struct Context {
@@ -184,7 +184,7 @@ impl Context {
             render_pass.set_bind_group(0, &self.bind_group, &[]);
             render_pass.set_bind_group(1, &self.camera_uniform.bind_group, &[]);
 
-            render_pass.draw_mesh(&self.mesh);
+            self.mesh.draw(&mut render_pass);
 
         }
 

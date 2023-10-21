@@ -28,15 +28,14 @@ pub struct Mesh {
 
 impl Mesh {
     pub fn new(device: &wgpu::Device, vertices: &[Vertex], indices: &[u16]) -> Self {
-
         let vertex_buffer = Self::create_vertex_buffer(
             device,
-            bytemuck::cast_slice(vertices)
+            bytemuck::cast_slice(vertices),
         );
 
         let index_buffer = Self::create_index_buffer(
             device,
-            bytemuck::cast_slice(indices)
+            bytemuck::cast_slice(indices),
         );
 
         Self {
@@ -44,6 +43,16 @@ impl Mesh {
             index_buffer,
             len: indices.len() as u32,
         }
+    }
+
+    pub fn draw<'a, 'b>(&'a self, render_pass: &'b mut wgpu::RenderPass<'a>) where 'a : 'b {
+
+        let vertex_slice = self.vertex_buffer.slice(..);
+        let index_slice = self.index_buffer.slice(..);
+
+        render_pass.set_vertex_buffer(0, vertex_slice);
+        render_pass.set_index_buffer(index_slice, wgpu::IndexFormat::Uint16);
+        render_pass.draw_indexed(0..self.len, 0, 0..1);
     }
 
     fn create_vertex_buffer(device: &wgpu::Device, slice: &[u8]) -> wgpu::Buffer {
@@ -87,21 +96,5 @@ impl Vertex {
             step_mode: wgpu::VertexStepMode::Vertex,
             attributes: &ATTRIBUTES,
         }
-    }
-}
-
-pub trait DrawMesh<'a> {
-    fn draw_mesh(&mut self, mesh: &'a Mesh);
-}
-
-impl<'a, 'b> DrawMesh<'b> for wgpu::RenderPass<'a>
-where 'b : 'a {
-    fn draw_mesh(&mut self, mesh: &'b Mesh) {
-        self.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
-        self.set_index_buffer(
-            mesh.index_buffer.slice(..),
-            wgpu::IndexFormat::Uint16
-        );
-        self.draw_indexed(0..mesh.len, 0, 0..1);
     }
 }
