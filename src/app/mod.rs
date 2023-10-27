@@ -1,8 +1,8 @@
 pub mod context;
 pub mod buffers;
 mod camera;
+mod texture;
 
-use image::imageops::contrast;
 use winit::{
     event::*,
     event_loop::{ControlFlow, EventLoopWindowTarget},
