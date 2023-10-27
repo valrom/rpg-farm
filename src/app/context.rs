@@ -14,14 +14,10 @@ pub struct Context {
     queue: wgpu::Queue,
     config: wgpu::SurfaceConfiguration,
     pub size: winit::dpi::PhysicalSize<u32>,
-
-    first_pipeline: wgpu::RenderPipeline,
-    second_pipeline: wgpu::RenderPipeline,
-
+    pipeline: wgpu::RenderPipeline,
     mesh: Mesh,
-
-    texture: Texture,
-
+    first_texture: Texture,
+    second_texture: Texture,
     pub is_render_first: bool,
     pub camera: Camera,
     camera_uniform: CameraUniform,
@@ -67,22 +63,27 @@ impl Context {
         );
 
         let mesh = Mesh::new(&device, VERTICES, INDICES);
+        let first_texture = Texture::new(
+            include_bytes!("../../resources/stone.jpeg"),
+            "stone_texture",
+            &device,
+            &queue
+        );
+        let second_texture = Texture::new(
+            include_bytes!("../../resources/grass.jpeg"),
+            "grass_texture",
+            &device,
+            &queue
+        );
 
-        let texture = Texture::new(include_bytes!("stone.jpeg"), &device, &queue);
         let camera_layout = CameraUniform::bind_group_layout(&device);
 
 
-        let first_pipeline = Context::create_render_pipeline(
+        let pipeline = Context::create_render_pipeline(
             &device,
             &config,
             first_shader,
-            &[&texture.layout, &camera_layout],
-        );
-        let second_pipeline = Context::create_render_pipeline(
-            &device,
-            &config,
-            second_shader,
-            &[&texture.layout, &camera_layout],
+            &[&first_texture.layout, &camera_layout],
         );
 
         let camera = Camera {
@@ -105,11 +106,11 @@ impl Context {
             queue,
             config,
             size,
-            first_pipeline,
-            second_pipeline,
+            pipeline,
             mesh,
             is_render_first: false,
-            texture,
+            first_texture,
+            second_texture,
             camera,
             camera_uniform,
         }
@@ -166,13 +167,17 @@ impl Context {
 
             let mut render_pass = encoder.begin_render_pass(&descriptor);
 
+            render_pass.set_pipeline(&self.pipeline);
+
+
             if self.is_render_first {
-                render_pass.set_pipeline(&self.first_pipeline);
+                render_pass.set_bind_group(0, &self.first_texture.bind_group, &[]);
             } else {
-                render_pass.set_pipeline(&self.second_pipeline);
+                render_pass.set_bind_group(0, &self.second_texture.bind_group, &[]);
             }
 
-            render_pass.set_bind_group(0, &self.texture.bind_group, &[]);
+
+
             render_pass.set_bind_group(1, &self.camera_uniform.bind_group, &[]);
 
             self.mesh.draw(&mut render_pass);

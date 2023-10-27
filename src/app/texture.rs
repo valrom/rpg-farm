@@ -5,8 +5,8 @@ pub struct Texture {
 }
 
 impl Texture {
-    pub fn new(bytes: &[u8], device: &wgpu::Device, queue: &wgpu::Queue) -> Self {
-        let texture = Self::create_texture(bytes, device, queue);
+    pub fn new(bytes: &[u8], name: &str, device: &wgpu::Device, queue: &wgpu::Queue) -> Self {
+        let texture = Self::create_texture(bytes, name, device, queue);
         let layout = Self::create_bind_group_layout(device);
         let bind_group = Self::create_bind_group(device, &texture, &layout);
 
@@ -17,7 +17,7 @@ impl Texture {
         }
     }
 
-    fn create_texture(bytes: &[u8], device: &wgpu::Device, queue: &wgpu::Queue) -> wgpu::Texture {
+    fn create_texture(bytes: &[u8], name: &str, device: &wgpu::Device, queue: &wgpu::Queue) -> wgpu::Texture {
         let diffuse_bytes = bytes;
         let diffuse_image = image::load_from_memory(diffuse_bytes).unwrap();
         let diffuse_rgba = diffuse_image.to_rgba8();
@@ -39,7 +39,7 @@ impl Texture {
             format: wgpu::TextureFormat::Rgba8UnormSrgb,
 
             usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
-            label: Some("Stone texture"),
+            label: Some(name),
             view_formats: &[],
         };
 
