@@ -3,7 +3,8 @@ use wgpu::{PowerPreference, RequestAdapterOptions};
 use winit::window::Window;
 use crate::app::{buffers, GameLogic};
 use crate::app::buffers::{INDICES, Mesh, VERTICES};
-use crate::app::camera::{Camera, CameraUniform};
+use crate::app::camera::Camera;
+use crate::app::matrix::MatrixUniform;
 use crate::app::texture::Texture;
 
 pub struct Context<'a> {
@@ -20,7 +21,7 @@ pub struct Context<'a> {
     pub second_texture: Texture,
     pub is_render_first: bool,
     pub camera: Camera,
-    pub camera_uniform: CameraUniform,
+    pub matrix_uniform: MatrixUniform,
 
     game_logic: &'a dyn GameLogic,
 }
@@ -59,10 +60,6 @@ impl<'a> Context<'a> {
             wgpu::include_wgsl!("shader.wgsl")
         );
 
-        let second_shader = device.create_shader_module(
-            wgpu::include_wgsl!("color_shader.wgsl")
-        );
-
         let mesh = Mesh::new(&device, VERTICES, INDICES);
         let first_texture = Texture::new(
             include_bytes!("../../resources/stone.jpeg"),
@@ -77,14 +74,13 @@ impl<'a> Context<'a> {
             &queue
         );
 
-        let camera_layout = CameraUniform::bind_group_layout(&device);
-
+        let matrix_uniform = MatrixUniform::new(&device);
 
         let pipeline = Context::create_render_pipeline(
             &device,
             &config,
             first_shader,
-            &[&first_texture.layout, &camera_layout],
+            &[&first_texture.layout, &matrix_uniform.layout],
         );
 
         let camera = Camera {
@@ -96,9 +92,6 @@ impl<'a> Context<'a> {
             z_near: 0.1,
             z_far: 100.0,
         };
-
-        let camera_uniform = CameraUniform::new(&device);
-
 
         Context {
             window,
@@ -113,7 +106,7 @@ impl<'a> Context<'a> {
             first_texture,
             second_texture,
             camera,
-            camera_uniform,
+            matrix_uniform,
             game_logic,
         }
     }
@@ -139,15 +132,14 @@ impl<'a> Context<'a> {
             &wgpu::TextureViewDescriptor::default()
         );
 
-        self.camera.aspect = self.config.width as f32 / self.config.height as f32;
-
-        self.camera_uniform.update_matrix(&self.camera, &self.queue);
-
         let mut encoder = self.device.create_command_encoder(
             &wgpu::CommandEncoderDescriptor {
                 label: Some("Render encoder")
             }
         );
+
+        self.camera.aspect = self.config.width as f32 / self.config.height as f32;
+        self.matrix_uniform.update(self.camera.calculate_matrix(), &self.queue);
 
         {
             let color_attachment = wgpu::RenderPassColorAttachment {

@@ -2,6 +2,7 @@ pub mod context;
 pub mod buffers;
 mod camera;
 mod texture;
+mod matrix;
 
 use winit::{
     event::*,

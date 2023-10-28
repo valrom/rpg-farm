@@ -1,6 +1,5 @@
 mod app;
 
-use wgpu::RenderPass;
 use app::App;
 
 
@@ -17,7 +16,7 @@ impl GameLogic for TestLogic {
     fn render<'a, 'b>(&'a self, render_pass: &'b mut wgpu::RenderPass<'a>, context: &'a Context) where 'a : 'b {
 
         render_pass.set_pipeline(&context.pipeline);
-        render_pass.set_bind_group(1, &context.camera_uniform.bind_group, &[]);
+        render_pass.set_bind_group(1, &context.matrix_uniform.bind_group, &[]);
 
         let texture = if context.is_render_first {
             &context.first_texture
