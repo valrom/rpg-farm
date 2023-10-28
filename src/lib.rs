@@ -1,5 +1,6 @@
 mod app;
 
+use wgpu::RenderPass;
 use app::App;
 
 
@@ -7,8 +8,26 @@ use winit::{
     event_loop::EventLoop,
     window::WindowBuilder,
 };
+use crate::app::context::Context;
+use crate::app::GameLogic;
 
-// TODO: Separate rendering. To commands
+struct TestLogic;
+
+impl GameLogic for TestLogic {
+    fn render<'a, 'b>(&'a self, render_pass: &'b mut wgpu::RenderPass<'a>, context: &'a Context) where 'a : 'b {
+
+        render_pass.set_pipeline(&context.pipeline);
+        render_pass.set_bind_group(1, &context.camera_uniform.bind_group, &[]);
+
+        let texture = if context.is_render_first {
+            &context.first_texture
+        } else {
+            &context.second_texture
+        };
+
+        context.mesh.draw(texture, render_pass);
+    }
+}
 
 
 pub async fn run() {
@@ -20,8 +39,7 @@ pub async fn run() {
         .build(&event_loop)
         .unwrap();
 
-
-    let mut app = App::new(window).await;
+    let mut app = App::new(window, &TestLogic).await;
 
     event_loop.run(move |event, event_lp, control_flow|{
         app.main_loop(event, event_lp, control_flow);

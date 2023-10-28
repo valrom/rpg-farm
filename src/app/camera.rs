@@ -85,7 +85,7 @@ impl CameraUniform {
     }
 
     pub fn bind_group_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
-        let desc = wgpu::BindGroupLayoutDescriptor {
+        static DESC : wgpu::BindGroupLayoutDescriptor = wgpu::BindGroupLayoutDescriptor {
             entries: &[
                 wgpu::BindGroupLayoutEntry {
                     binding: 0,
@@ -101,7 +101,7 @@ impl CameraUniform {
             label: Some("Camera Bind Group Layout"),
         };
 
-        device.create_bind_group_layout(&desc)
+        device.create_bind_group_layout(&DESC)
     }
 
     pub fn create_buffer(device: &wgpu::Device, matrix: &[[f32;4]; 4]) -> wgpu::Buffer {

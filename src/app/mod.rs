@@ -12,16 +12,21 @@ use winit::{
 use context::Context;
 
 
-pub struct App {
-    context : Context,
+pub struct App<'a> {
+    context : Context<'a>,
     pub camera_angles: cgmath::Point2<f32>,
 }
 
 
-impl App {
-    pub async fn new(window: Window) -> Self {
+pub trait GameLogic {
+
+    fn render<'a, 'b>(&'a self, render_pass: &'b mut wgpu::RenderPass<'a>, context: &'a Context) where 'a : 'b;
+}
+
+impl<'a> App<'a> {
+    pub async fn new(window: Window, game_logic: &'a dyn GameLogic) -> App<'a> {
         Self {
-            context: Context::new(window).await,
+            context: Context::new(window, game_logic).await,
             camera_angles: cgmath::Point2::new(0.0, 0.0),
         }
     }

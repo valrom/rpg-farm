@@ -1,4 +1,5 @@
 use wgpu::util::DeviceExt;
+use crate::app::texture::Texture;
 
 pub const VERTICES: &[Vertex] = &[
     Vertex { position: [-0.5, 0.5, 0.0], tex_coords: [0.0, 0.0] },
@@ -45,11 +46,12 @@ impl Mesh {
         }
     }
 
-    pub fn draw<'a, 'b>(&'a self, render_pass: &'b mut wgpu::RenderPass<'a>) where 'a : 'b {
+    pub fn draw<'a, 'b>(&'a self, texture: &'a Texture, render_pass: &'b mut wgpu::RenderPass<'a>) where 'a : 'b {
 
         let vertex_slice = self.vertex_buffer.slice(..);
         let index_slice = self.index_buffer.slice(..);
 
+        render_pass.set_bind_group(0, &texture.bind_group, &[]);
         render_pass.set_vertex_buffer(0, vertex_slice);
         render_pass.set_index_buffer(index_slice, wgpu::IndexFormat::Uint16);
         render_pass.draw_indexed(0..self.len, 0, 0..1);

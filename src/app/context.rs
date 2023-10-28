@@ -1,12 +1,12 @@
 use std::default::Default;
 use wgpu::{PowerPreference, RequestAdapterOptions};
 use winit::window::Window;
-use crate::app::buffers;
+use crate::app::{buffers, GameLogic};
 use crate::app::buffers::{INDICES, Mesh, VERTICES};
 use crate::app::camera::{Camera, CameraUniform};
 use crate::app::texture::Texture;
 
-pub struct Context {
+pub struct Context<'a> {
     window: Window,
 
     surface: wgpu::Surface,
@@ -14,18 +14,19 @@ pub struct Context {
     queue: wgpu::Queue,
     config: wgpu::SurfaceConfiguration,
     pub size: winit::dpi::PhysicalSize<u32>,
-    pipeline: wgpu::RenderPipeline,
-    mesh: Mesh,
-    first_texture: Texture,
-    second_texture: Texture,
+    pub pipeline: wgpu::RenderPipeline,
+    pub mesh: Mesh,
+    pub first_texture: Texture,
+    pub second_texture: Texture,
     pub is_render_first: bool,
     pub camera: Camera,
-    camera_uniform: CameraUniform,
+    pub camera_uniform: CameraUniform,
+
+    game_logic: &'a dyn GameLogic,
 }
 
-
-impl Context {
-    pub async fn new(window: Window) -> Self {
+impl<'a> Context<'a> {
+    pub async fn new(window: Window, game_logic: &'a dyn GameLogic) -> Context<'a> {
         let size = window.inner_size();
         let instance = wgpu::Instance::default();
         let surface = unsafe { instance.create_surface(&window) }.unwrap();
@@ -113,6 +114,7 @@ impl Context {
             second_texture,
             camera,
             camera_uniform,
+            game_logic,
         }
     }
 
@@ -166,21 +168,8 @@ impl Context {
             };
 
             let mut render_pass = encoder.begin_render_pass(&descriptor);
+            self.game_logic.render(&mut render_pass, &self);
 
-            render_pass.set_pipeline(&self.pipeline);
-
-
-            if self.is_render_first {
-                render_pass.set_bind_group(0, &self.first_texture.bind_group, &[]);
-            } else {
-                render_pass.set_bind_group(0, &self.second_texture.bind_group, &[]);
-            }
-
-
-
-            render_pass.set_bind_group(1, &self.camera_uniform.bind_group, &[]);
-
-            self.mesh.draw(&mut render_pass);
         }
 
         self.queue.submit(std::iter::once(encoder.finish()));
@@ -249,4 +238,3 @@ impl Context {
         )
     }
 }
-
