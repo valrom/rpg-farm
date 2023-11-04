@@ -32,7 +32,7 @@ impl GameLogic for TestLogic {
 pub async fn run() {
     env_logger::init();
 
-    let event_loop = EventLoop::new();
+    let event_loop = EventLoop::new().unwrap();
     let window =
         WindowBuilder::new()
         .build(&event_loop)
@@ -40,7 +40,7 @@ pub async fn run() {
 
     let mut app = App::new(window, &TestLogic).await;
 
-    event_loop.run(move |event, event_lp, control_flow|{
-        app.main_loop(event, event_lp, control_flow);
-    });
+    event_loop.run(move |event, elwt|{
+        app.main_loop(event, elwt);
+    }).unwrap();
 }

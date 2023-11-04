@@ -1,5 +1,5 @@
 use std::default::Default;
-use wgpu::{PowerPreference, RequestAdapterOptions};
+use wgpu::{PowerPreference, RequestAdapterOptions, StoreOp};
 use winit::window::Window;
 use crate::app::{buffers, GameLogic};
 use crate::app::buffers::{INDICES, Mesh, VERTICES};
@@ -9,7 +9,6 @@ use crate::app::texture::Texture;
 
 pub struct Context<'a> {
     window: Window,
-
     surface: wgpu::Surface,
     device: wgpu::Device,
     queue: wgpu::Queue,
@@ -126,6 +125,9 @@ impl<'a> Context<'a> {
     }
 
     pub fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
+
+        println!("Render");
+
         let output = self.surface.get_current_texture()?;
 
         let view = output.texture.create_view(
@@ -146,8 +148,8 @@ impl<'a> Context<'a> {
                 view: &view,
                 resolve_target: None,
                 ops: wgpu::Operations {
-                    load: wgpu::LoadOp::Clear(wgpu::Color::BLUE),
-                    store: true,
+                    load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                    store: StoreOp::Discard,
                 },
             };
 
@@ -157,6 +159,8 @@ impl<'a> Context<'a> {
                     Some(color_attachment)
                 ],
                 depth_stencil_attachment: None,
+                occlusion_query_set: None,
+                timestamp_writes: None,
             };
 
             let mut render_pass = encoder.begin_render_pass(&descriptor);
@@ -164,7 +168,7 @@ impl<'a> Context<'a> {
 
         }
 
-        self.queue.submit(std::iter::once(encoder.finish()));
+        self.queue.submit(Some(encoder.finish()));
         output.present();
 
         Ok(())

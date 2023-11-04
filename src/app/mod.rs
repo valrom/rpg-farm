@@ -9,6 +9,7 @@ use winit::{
     event_loop::{ControlFlow, EventLoopWindowTarget},
     window::Window,
 };
+use winit::keyboard::{KeyCode, PhysicalKey};
 
 use context::Context;
 
@@ -20,7 +21,6 @@ pub struct App<'a> {
 
 
 pub trait GameLogic {
-
     fn render<'a, 'b>(&'a self, render_pass: &'b mut wgpu::RenderPass<'a>, context: &'a Context) where 'a : 'b;
 }
 
@@ -32,23 +32,29 @@ impl<'a> App<'a> {
         }
     }
 
-    pub fn main_loop(&mut self, event: Event<()>, _event_loop: &EventLoopWindowTarget<()>, control_flow: &mut ControlFlow) {
-        self.handle_event(event, control_flow);
+    pub fn main_loop(&mut self, event: Event<()>, elwt: &EventLoopWindowTarget<()>) {
+        self.handle_event(event, elwt);
     }
 
-    fn handle_event(&mut self, event: Event<()>, control_flow: &mut ControlFlow) -> bool {
+    fn handle_event(&mut self, event: Event<()>, elwt: &EventLoopWindowTarget<()>) -> bool {
         match event {
             Event::WindowEvent {
                 window_id,
                 event
-            } if window_id == self.context.window().id() => self.handle_window_event(event, control_flow),
+            } if window_id == self.context.window().id() => {
+
+                match event {
+                    WindowEvent::RedrawRequested => {
+                        self.context.camera.set_angles(self.camera_angles);
+                        self.context.render().unwrap();
+                    },
+
+                    _ => self.handle_window_event(event, elwt),
+                }
+
+            },
             
-            Event::RedrawRequested(window_id) if window_id == self.context.window().id() => {
-                self.context.camera.set_angles(self.camera_angles);
-                self.context.render().unwrap();
-            }
-            
-            Event::MainEventsCleared => {
+            Event::AboutToWait => {
                 self.context.window().request_redraw();
             }
 
@@ -56,7 +62,7 @@ impl<'a> App<'a> {
                 event,
                 ..
             } => {
-                self.handle_device_event(event, control_flow);
+                self.handle_device_event(event, elwt);
             },
             
             _ => {},
@@ -65,7 +71,7 @@ impl<'a> App<'a> {
         true
     }
 
-    fn handle_window_event(&mut self, event: WindowEvent, control_flow: &mut ControlFlow) {
+    fn handle_window_event(&mut self, event: WindowEvent, elwt: &EventLoopWindowTarget<()>) {
         
         if self.input(&event) {
             return;
@@ -77,13 +83,13 @@ impl<'a> App<'a> {
                 self.context.resize(size);
             },
 
-            WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
+            WindowEvent::CloseRequested => elwt.exit(),
             
             _ => {},
         }
     }
 
-    fn handle_device_event(&mut self, event: DeviceEvent, control_flow: &mut ControlFlow) {
+    fn handle_device_event(&mut self, event: DeviceEvent, _elwt: &EventLoopWindowTarget<()>) {
         match event {
             DeviceEvent::MouseMotion {
                 delta
@@ -99,8 +105,8 @@ impl<'a> App<'a> {
 
         match event {
             WindowEvent::KeyboardInput {
-                input: KeyboardInput {
-                    virtual_keycode: Some(VirtualKeyCode::Space),
+                event: KeyEvent {
+                    physical_key: PhysicalKey::Code(KeyCode::Space),
                     state: ElementState::Released,
                     ..
                 },

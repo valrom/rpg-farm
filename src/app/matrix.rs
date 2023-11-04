@@ -2,7 +2,7 @@ use wgpu::BufferAddress;
 use wgpu::util::DeviceExt;
 
 pub struct MatrixUniform {
-    pub matrix: [[f32;4];4],
+    pub matrix: [[f32; 4]; 4],
     pub layout: wgpu::BindGroupLayout,
     pub buffer: wgpu::Buffer,
     pub bind_group: wgpu::BindGroup,
@@ -19,14 +19,14 @@ impl MatrixUniform {
         let bind_group = Self::create_bind_group(
             device,
             &bind_group_layout,
-            &buffer
+            &buffer,
         );
 
         Self {
             matrix,
             layout: bind_group_layout,
             buffer,
-            bind_group
+            bind_group,
         }
     }
 
@@ -36,14 +36,14 @@ impl MatrixUniform {
         queue.write_buffer(
             &self.buffer,
             BufferAddress::default(),
-            bytemuck::cast_slice(&matrix)
+            bytemuck::cast_slice(&matrix),
         );
 
         queue.submit([]);
     }
 
     fn bind_group_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
-        static DESC : wgpu::BindGroupLayoutDescriptor = wgpu::BindGroupLayoutDescriptor {
+        static DESC: wgpu::BindGroupLayoutDescriptor = wgpu::BindGroupLayoutDescriptor {
             entries: &[
                 wgpu::BindGroupLayoutEntry {
                     binding: 0,
@@ -62,7 +62,7 @@ impl MatrixUniform {
         device.create_bind_group_layout(&DESC)
     }
 
-    fn create_buffer(device: &wgpu::Device, matrix: &[[f32;4]; 4]) -> wgpu::Buffer {
+    fn create_buffer(device: &wgpu::Device, matrix: &[[f32; 4]; 4]) -> wgpu::Buffer {
         device.create_buffer_init(
             &wgpu::util::BufferInitDescriptor {
                 label: Some("Camera Buffer"),
@@ -75,18 +75,17 @@ impl MatrixUniform {
     fn create_bind_group(
         device: &wgpu::Device,
         layout: &wgpu::BindGroupLayout,
-        buffer: &wgpu::Buffer
+        buffer: &wgpu::Buffer,
     ) -> wgpu::BindGroup {
-
         let desc = wgpu::BindGroupDescriptor {
             label: Some("Matrix bind group"),
             layout,
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
-                    resource: buffer.as_entire_binding()
+                    resource: buffer.as_entire_binding(),
                 }
-            ]
+            ],
         };
 
         device.create_bind_group(&desc)

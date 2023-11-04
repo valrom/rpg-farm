@@ -9,7 +9,7 @@ edition = "2021"
 winit = "*"
 env_logger = "*"
 log = "*"
-wgpu = "*"
+wgpu = { git = "https://github.com/gfx-rs/wgpu" }
 tokio = { version = "*", features = ["full"] }
 bytemuck = { version = "*", features = ["derive"] }
 image = { version = "*", features = ["png", "jpeg"] }
