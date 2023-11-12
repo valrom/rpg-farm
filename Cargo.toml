@@ -6,10 +6,10 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-winit = "*"
+winit = { version="*", features = ["rwh_05"] }
 env_logger = "*"
 log = "*"
-wgpu = { git = "https://github.com/gfx-rs/wgpu" }
+wgpu = { version = "*" }
 tokio = { version = "*", features = ["full"] }
 bytemuck = { version = "*", features = ["derive"] }
 image = { version = "*", features = ["png", "jpeg"] }
