@@ -4,6 +4,7 @@ mod camera;
 mod texture;
 mod matrix;
 
+use std::cell::RefCell;
 use winit::{
     event::*,
     event_loop::{ControlFlow, EventLoopWindowTarget},
@@ -12,22 +13,31 @@ use winit::{
 use winit::keyboard::{KeyCode, PhysicalKey};
 
 use context::Context;
+use crate::app::context::Renderer;
 
 
 pub struct App<'a> {
-    context : Context<'a>,
+    game_logic: &'a mut dyn GameLogic,
+    context : Context,
     pub camera_angles: cgmath::Point2<f32>,
 }
 
 
 pub trait GameLogic {
-    fn render<'a, 'b>(&'a self, render_pass: &'b mut wgpu::RenderPass<'a>, context: &'a Context) where 'a : 'b;
+    fn render<'a, 'b>(&'a mut self, renderer: &'b mut Renderer<'a>) where 'a : 'b;
+
+    fn init<'a, 'b>(&'a mut self, renderer: &'b mut Renderer<'a>) where 'a : 'b;
 }
 
 impl<'a> App<'a> {
-    pub async fn new(window: Window, game_logic: &'a dyn GameLogic) -> App<'a> {
+    pub async fn new(window: Window, game_logic: &'a mut dyn GameLogic) -> App<'a> {
+
+        let mut context = Context::new(window).await;
+        context.init(game_logic);
+
         Self {
-            context: Context::new(window, game_logic).await,
+            game_logic,
+            context,
             camera_angles: cgmath::Point2::new(0.0, 0.0),
         }
     }
@@ -46,7 +56,7 @@ impl<'a> App<'a> {
                 match event {
                     WindowEvent::RedrawRequested => {
                         self.context.camera.set_angles(self.camera_angles);
-                        self.context.render().unwrap();
+                        self.context.render(self.game_logic).unwrap();
                     },
 
                     _ => self.handle_window_event(event, elwt),
@@ -112,7 +122,7 @@ impl<'a> App<'a> {
                 },
                 ..
             } => {
-                self.context.is_render_first = !self.context.is_render_first;
+                println!("Space pressed");
                 true
             },
 

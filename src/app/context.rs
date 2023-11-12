@@ -1,32 +1,87 @@
 use std::default::Default;
+use std::fs::File;
+use std::io::Read;
 use wgpu::{PowerPreference, RequestAdapterOptions, StoreOp};
 use winit::window::Window;
 use crate::app::{buffers, GameLogic};
-use crate::app::buffers::{INDICES, Mesh, VERTICES};
+use crate::app::buffers::{Mesh, Vertex};
 use crate::app::camera::Camera;
 use crate::app::matrix::MatrixUniform;
 use crate::app::texture::Texture;
 
-pub struct Context<'a> {
+
+pub struct DrawCall {
+    pub mesh_id: usize,
+    pub texture_id: usize,
+    pub matrix: cgmath::Matrix4<f32>,
+}
+
+pub struct Renderer<'a> {
+    context: &'a mut Context,
+    draw_calls: Vec<DrawCall>,
+}
+
+impl<'a> Renderer<'a> {
+    fn new<'b>(context: &'b mut Context) -> Renderer<'a> where 'b : 'a {
+        Renderer {
+            context,
+            draw_calls: vec![],
+        }
+    }
+
+    pub fn add_texture(&mut self, filepath: &str) -> Option<usize> {
+
+        let mut f = File::open(filepath).ok()?;
+        let mut buffer = Vec::new();
+
+        // read the whole file
+        f.read_to_end(&mut buffer).ok()?;
+
+        let texture = Texture::new(
+            buffer.as_slice(),
+            "Texture",
+            &self.context.device,
+            &self.context.queue
+        );
+
+
+        self.context.textures.push(texture);
+        Some(self.context.textures.len() - 1)
+    }
+
+    pub fn add_mesh(&mut self, vertices: &[Vertex], indices: &[u16]) -> Option<usize> {
+        let mesh = Mesh::new(
+            &self.context.device,
+            bytemuck::cast_slice(vertices),
+            bytemuck::cast_slice(indices)
+        );
+
+        self.context.meshes.push(mesh);
+        Some(self.context.meshes.len() - 1)
+    }
+
+    pub fn draw(&mut self, draw_call: DrawCall) {
+        self.draw_calls.push(draw_call);
+    }
+}
+
+pub struct Context {
     window: Window,
     surface: wgpu::Surface,
     device: wgpu::Device,
     queue: wgpu::Queue,
     config: wgpu::SurfaceConfiguration,
-    pub size: winit::dpi::PhysicalSize<u32>,
-    pub pipeline: wgpu::RenderPipeline,
-    pub mesh: Mesh,
-    pub first_texture: Texture,
-    pub second_texture: Texture,
-    pub is_render_first: bool,
+    size: winit::dpi::PhysicalSize<u32>,
+    pipeline: wgpu::RenderPipeline,
     pub camera: Camera,
-    pub matrix_uniform: MatrixUniform,
+    matrix_uniform: MatrixUniform,
 
-    game_logic: &'a dyn GameLogic,
+    meshes: Vec<Mesh>,
+    textures: Vec<Texture>,
 }
 
-impl<'a> Context<'a> {
-    pub async fn new(window: Window, game_logic: &'a dyn GameLogic) -> Context<'a> {
+impl Context {
+    pub async fn new(window: Window) -> Self {
         let size = window.inner_size();
         let instance = wgpu::Instance::default();
         let surface = unsafe { instance.create_surface(&window) }.unwrap();
@@ -59,27 +114,13 @@ impl<'a> Context<'a> {
             wgpu::include_wgsl!("shader.wgsl")
         );
 
-        let mesh = Mesh::new(&device, VERTICES, INDICES);
-        let first_texture = Texture::new(
-            include_bytes!("../../resources/stone.jpeg"),
-            "stone_texture",
-            &device,
-            &queue
-        );
-        let second_texture = Texture::new(
-            include_bytes!("../../resources/grass.jpeg"),
-            "grass_texture",
-            &device,
-            &queue
-        );
-
         let matrix_uniform = MatrixUniform::new(&device);
 
         let pipeline = Context::create_render_pipeline(
             &device,
             &config,
             first_shader,
-            &[&first_texture.layout, &matrix_uniform.layout],
+            &[&Texture::create_bind_group_layout(&device), &matrix_uniform.layout],
         );
 
         let camera = Camera {
@@ -100,13 +141,10 @@ impl<'a> Context<'a> {
             config,
             size,
             pipeline,
-            mesh,
-            is_render_first: false,
-            first_texture,
-            second_texture,
             camera,
             matrix_uniform,
-            game_logic,
+            meshes: vec![],
+            textures: vec![],
         }
     }
 
@@ -124,9 +162,17 @@ impl<'a> Context<'a> {
         }
     }
 
-    pub fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
+    pub fn init(&mut self, game_logic: &mut dyn GameLogic) {
+        game_logic.init(&mut Renderer::new(self));
+    }
 
-        println!("Render");
+    pub fn render(&mut self, game_logic: &mut dyn GameLogic) -> Result<(), wgpu::SurfaceError> {
+
+        let draw_calls = {
+            let mut renderer = Renderer::new(self);
+            game_logic.render(&mut renderer);
+            renderer.draw_calls
+        };
 
         let output = self.surface.get_current_texture()?;
 
@@ -134,41 +180,55 @@ impl<'a> Context<'a> {
             &wgpu::TextureViewDescriptor::default()
         );
 
-        let mut encoder = self.device.create_command_encoder(
-            &wgpu::CommandEncoderDescriptor {
-                label: Some("Render encoder")
-            }
-        );
+
 
         self.camera.aspect = self.config.width as f32 / self.config.height as f32;
-        self.matrix_uniform.update(self.camera.calculate_matrix(), &self.queue);
 
-        {
-            let color_attachment = wgpu::RenderPassColorAttachment {
-                view: &view,
-                resolve_target: None,
-                ops: wgpu::Operations {
-                    load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
-                    store: StoreOp::Store,
-                },
-            };
+        for draw_call in draw_calls {
 
-            let descriptor = wgpu::RenderPassDescriptor {
-                label: Some("Render Pass"),
-                color_attachments: &[
-                    Some(color_attachment)
-                ],
-                depth_stencil_attachment: None,
-                occlusion_query_set: None,
-                timestamp_writes: None,
-            };
+            let mut encoder = self.device.create_command_encoder(
+                &wgpu::CommandEncoderDescriptor {
+                    label: Some("Render encoder")
+                }
+            );
 
-            let mut render_pass = encoder.begin_render_pass(&descriptor);
-            self.game_logic.render(&mut render_pass, &self);
+            {
+                let color_attachment = wgpu::RenderPassColorAttachment {
+                    view: &view,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                        store: StoreOp::Store,
+                    },
+                };
 
+                let descriptor = wgpu::RenderPassDescriptor {
+                    label: Some("Render Pass"),
+                    color_attachments: &[
+                        Some(color_attachment)
+                    ],
+                    depth_stencil_attachment: None,
+                    occlusion_query_set: None,
+                    timestamp_writes: None,
+                };
+
+                let mut render_pass = encoder.begin_render_pass(&descriptor);
+                render_pass.set_pipeline(&self.pipeline);
+
+
+                let total_matrix = draw_call.matrix * self.camera.calculate_matrix();
+                self.matrix_uniform.update( total_matrix, &self.queue);
+
+                let texture = &self.textures[draw_call.texture_id];
+                let mesh = &self.meshes[draw_call.mesh_id];
+
+                render_pass.set_bind_group(1, &self.matrix_uniform.bind_group, &[]);
+                mesh.draw(texture, &mut render_pass);
+            }
+
+            self.queue.submit(Some(encoder.finish()));
         }
 
-        self.queue.submit(Some(encoder.finish()));
         output.present();
 
         Ok(())

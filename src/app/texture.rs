@@ -64,7 +64,7 @@ impl Texture {
         texture
     }
 
-    fn create_bind_group_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
+    pub fn create_bind_group_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
         let fragment = wgpu::ShaderStages::FRAGMENT;
 
         let first_entry = wgpu::BindGroupLayoutEntry {

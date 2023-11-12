@@ -1,5 +1,7 @@
 mod app;
 
+use std::cell::RefCell;
+use cgmath::SquareMatrix;
 use app::App;
 
 
@@ -7,24 +9,39 @@ use winit::{
     event_loop::EventLoop,
     window::WindowBuilder,
 };
-use crate::app::context::Context;
+use crate::app::buffers::{INDICES, VERTICES};
+use crate::app::context::{Context, DrawCall, Renderer};
 use crate::app::GameLogic;
 
-struct TestLogic;
+struct TestLogic {
+    texture: Option<usize>,
+    mesh: Option<usize>,
+}
+
+impl TestLogic {
+    fn new() -> Self {
+        Self {
+            texture: None,
+            mesh: None,
+        }
+    }
+}
 
 impl GameLogic for TestLogic {
-    fn render<'a, 'b>(&'a self, render_pass: &'b mut wgpu::RenderPass<'a>, context: &'a Context) where 'a : 'b {
+    fn init<'a, 'b>(&'a mut self, renderer: &'b mut Renderer<'a>) where 'a: 'b {
+        self.mesh = renderer.add_mesh(VERTICES, INDICES);
+        self.texture = renderer.add_texture("resources/grass.jpeg");
+    }
 
-        render_pass.set_pipeline(&context.pipeline);
-        render_pass.set_bind_group(1, &context.matrix_uniform.bind_group, &[]);
+    fn render<'a, 'b>(&'a mut self, renderer: &'b mut Renderer<'a>) where 'a: 'b {
 
-        let texture = if context.is_render_first {
-            &context.first_texture
-        } else {
-            &context.second_texture
-        };
-
-        context.mesh.draw(texture, render_pass);
+        if let (Some(mesh_id), Some(texture_id)) = (self.mesh, self.texture) {
+            renderer.draw(DrawCall {
+                mesh_id,
+                texture_id,
+                matrix: cgmath::Matrix4::<f32>::identity(),
+            })
+        }
     }
 }
 
@@ -38,7 +55,9 @@ pub async fn run() {
         .build(&event_loop)
         .unwrap();
 
-    let mut app = App::new(window, &TestLogic).await;
+    let mut test_logic = TestLogic::new();
+
+    let mut app = App::new(window, &mut test_logic).await;
 
     event_loop.run(move |event, elwt|{
         app.main_loop(event, elwt);
