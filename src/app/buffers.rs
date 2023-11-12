@@ -2,10 +2,10 @@ use wgpu::util::DeviceExt;
 use crate::app::texture::Texture;
 
 pub const VERTICES: &[Vertex] = &[
-    Vertex { position: [-0.5, 0.5, 0.0], tex_coords: [0.0, 0.0] },
-    Vertex { position: [0.5, 0.5, 0.0], tex_coords: [1.0, 0.0] },
-    Vertex { position: [-0.5, -0.5, 0.0], tex_coords: [0.0, 1.0] },
-    Vertex { position: [0.5, -0.5, 0.0], tex_coords: [1.0, 1.0] }
+    Vertex { position: Position([-0.5, 0.5, 0.0]), tex_coords: UV([0.0, 0.0]) },
+    Vertex { position: Position([0.5, 0.5, 0.0]), tex_coords: UV([1.0, 0.0]) },
+    Vertex { position: Position([-0.5, -0.5, 0.0]), tex_coords: UV([0.0, 1.0]) },
+    Vertex { position: Position([0.5, -0.5, 0.0]), tex_coords: UV([1.0, 1.0]) }
 ];
 
 pub const INDICES: &[u16] = &[
@@ -17,9 +17,17 @@ pub const INDICES: &[u16] = &[
 #[repr(C)]
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct Vertex {
-    position: [f32; 3],
-    tex_coords: [f32; 2],
+    position: Position,
+    tex_coords: UV,
 }
+
+#[repr(C)]
+#[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct Position([f32;3]);
+
+#[repr(C)]
+#[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct UV([f32;2]);
 
 pub struct Mesh {
     vertex_buffer: wgpu::Buffer,
@@ -87,7 +95,7 @@ impl Vertex {
                 shader_location: 0,
             },
             wgpu::VertexAttribute {
-                offset: std::mem::size_of::<[f32; 3]>() as wgpu::BufferAddress,
+                offset: std::mem::size_of::<Position>() as wgpu::BufferAddress,
                 format: wgpu::VertexFormat::Float32x2,
                 shader_location: 1,
             },

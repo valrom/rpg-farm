@@ -3,7 +3,7 @@ use std::fs::File;
 use std::io::Read;
 use wgpu::{PowerPreference, RequestAdapterOptions, StoreOp};
 use winit::window::Window;
-use crate::app::{buffers, GameLogic};
+use crate::app::GameLogic;
 use crate::app::buffers::{Mesh, Vertex};
 use crate::app::camera::Camera;
 use crate::app::matrix::MatrixUniform;
@@ -257,7 +257,7 @@ impl Context {
         let vertex_state = wgpu::VertexState {
             module: &shader,
             entry_point: "vs_main",
-            buffers: &[buffers::Vertex::desc()],
+            buffers: &[Vertex::desc()],
         };
 
         let fragment_state = wgpu::FragmentState {
