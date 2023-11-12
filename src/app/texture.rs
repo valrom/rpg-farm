@@ -1,5 +1,5 @@
 pub struct Texture {
-    texture: wgpu::Texture,
+    _texture: wgpu::Texture,
     pub layout: wgpu::BindGroupLayout,
     pub bind_group: wgpu::BindGroup,
 }
@@ -11,7 +11,7 @@ impl Texture {
         let bind_group = Self::create_bind_group(device, &texture, &layout);
 
         Self {
-            texture,
+            _texture: texture,
             layout,
             bind_group,
         }

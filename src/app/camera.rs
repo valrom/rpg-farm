@@ -1,6 +1,3 @@
-use wgpu::BufferAddress;
-use wgpu::util::DeviceExt;
-
 pub struct Camera {
     pub eye: cgmath::Point3<f32>,
     pub target: cgmath::Point3<f32>,

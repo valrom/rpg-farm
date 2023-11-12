@@ -1,6 +1,5 @@
 mod app;
 
-use std::cell::RefCell;
 use cgmath::SquareMatrix;
 use app::App;
 
@@ -10,7 +9,7 @@ use winit::{
     window::WindowBuilder,
 };
 use crate::app::buffers::{INDICES, VERTICES};
-use crate::app::context::{Context, DrawCall, Renderer};
+use crate::app::context::{DrawCall, Renderer};
 use crate::app::GameLogic;
 
 struct TestLogic {

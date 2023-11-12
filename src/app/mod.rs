@@ -4,10 +4,9 @@ mod camera;
 mod texture;
 mod matrix;
 
-use std::cell::RefCell;
 use winit::{
     event::*,
-    event_loop::{ControlFlow, EventLoopWindowTarget},
+    event_loop::EventLoopWindowTarget,
     window::Window,
 };
 use winit::keyboard::{KeyCode, PhysicalKey};
