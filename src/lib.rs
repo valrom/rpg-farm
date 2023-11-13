@@ -1,6 +1,6 @@
 mod app;
 
-use cgmath::{SquareMatrix, Vector3, Vector4};
+use cgmath::{SquareMatrix, Vector4};
 use app::App;
 
 
@@ -13,14 +13,14 @@ use crate::app::context::{DrawCall, Renderer};
 use crate::app::GameLogic;
 
 struct TestLogic {
-    texture: usize,
+    textures: Vec<usize>,
     mesh: usize,
 }
 
 impl TestLogic {
     fn new() -> Self {
         Self {
-            texture: 0,
+            textures: Vec::with_capacity(2),
             mesh: 0,
         }
     }
@@ -29,14 +29,19 @@ impl TestLogic {
 impl GameLogic for TestLogic {
     fn init<'a, 'b>(&'a mut self, renderer: &'b mut Renderer<'a>) where 'a: 'b {
         self.mesh = renderer.add_mesh(VERTICES, INDICES);
-        self.texture = renderer.add_texture("resources/grass.jpeg")
-            .expect("Can't loading texture");
+
+        let first_texture = renderer.add_texture("resources/grass.jpeg")
+            .expect("Can't first loading texture");
+
+        let second_texture = renderer.add_texture("resources/stone.jpeg")
+            .expect("Can't loading second texture");
+
+        self.textures.push(first_texture);
+        self.textures.push(second_texture);
     }
 
     fn render<'a, 'b>(&'a mut self, renderer: &'b mut Renderer<'a>) where 'a: 'b {
-
         let mut matrix = cgmath::Matrix4::<f32>::identity();
-
 
         const DISTANCE : f32 = 1.25;
 
@@ -52,7 +57,7 @@ impl GameLogic for TestLogic {
 
                     renderer.draw(DrawCall {
                         mesh_id: self.mesh,
-                        texture_id: self.texture,
+                        texture_id: self.textures[(x + y + z) as usize % self.textures.len()],
                         matrix,
                     });
                 }
