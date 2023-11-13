@@ -31,10 +31,12 @@ impl Camera {
     }
 
     pub fn set_angles(&mut self, coords: cgmath::Point2<f32>) {
+        const DISTANCE : f32 = 15.0;
+
         self.eye = cgmath::Point3::new(
-            5.0 * coords.x.cos(),
+            DISTANCE * coords.x.cos(),
             0.0,
-            5.0 * coords.x.sin(),
+            DISTANCE * coords.x.sin(),
         );
     }
 }

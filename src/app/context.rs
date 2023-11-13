@@ -1,6 +1,7 @@
 use std::default::Default;
 use std::fs::File;
 use std::io::Read;
+use std::iter::Zip;
 use wgpu::{PowerPreference, RequestAdapterOptions, StoreOp};
 use winit::window::Window;
 use crate::app::GameLogic;
@@ -49,7 +50,7 @@ impl<'a> Renderer<'a> {
         Some(self.context.textures.len() - 1)
     }
 
-    pub fn add_mesh(&mut self, vertices: &[Vertex], indices: &[u16]) -> Option<usize> {
+    pub fn add_mesh(&mut self, vertices: &[Vertex], indices: &[u16]) -> usize {
         let mesh = Mesh::new(
             &self.context.device,
             bytemuck::cast_slice(vertices),
@@ -57,7 +58,7 @@ impl<'a> Renderer<'a> {
         );
 
         self.context.meshes.push(mesh);
-        Some(self.context.meshes.len() - 1)
+        self.context.meshes.len() - 1
     }
 
     pub fn draw(&mut self, draw_call: DrawCall) {
@@ -184,50 +185,60 @@ impl Context {
 
         self.camera.aspect = self.config.width as f32 / self.config.height as f32;
 
-        for draw_call in draw_calls {
 
-            let mut encoder = self.device.create_command_encoder(
-                &wgpu::CommandEncoderDescriptor {
-                    label: Some("Render encoder")
-                }
-            );
+        let mut encoder = self.device.create_command_encoder(
+            &wgpu::CommandEncoderDescriptor {
+                label: Some("Render encoder")
+            }
+        );
 
-            {
-                let color_attachment = wgpu::RenderPassColorAttachment {
-                    view: &view,
-                    resolve_target: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
-                        store: StoreOp::Store,
-                    },
-                };
+        {
+            let color_attachment = wgpu::RenderPassColorAttachment {
+                view: &view,
+                resolve_target: None,
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                    store: StoreOp::Store,
+                },
+            };
 
-                let descriptor = wgpu::RenderPassDescriptor {
-                    label: Some("Render Pass"),
-                    color_attachments: &[
-                        Some(color_attachment)
-                    ],
-                    depth_stencil_attachment: None,
-                    occlusion_query_set: None,
-                    timestamp_writes: None,
-                };
+            let descriptor = wgpu::RenderPassDescriptor {
+                label: Some("Render Pass"),
+                color_attachments: &[
+                    Some(color_attachment)
+                ],
+                depth_stencil_attachment: None,
+                occlusion_query_set: None,
+                timestamp_writes: None,
+            };
 
-                let mut render_pass = encoder.begin_render_pass(&descriptor);
-                render_pass.set_pipeline(&self.pipeline);
+            let mut uniforms = Vec::new();
+
+            for draw_call in draw_calls.iter() {
+                let total_matrix = self.camera.calculate_matrix() * draw_call.matrix;
+                let mut uniform = MatrixUniform::new(&self.device);
+                uniform.update(total_matrix, &self.queue);
+
+                uniforms.push(
+                    uniform
+                );
+            }
+
+            let mut render_pass = encoder.begin_render_pass(&descriptor);
+            render_pass.set_pipeline(&self.pipeline);
 
 
-                let total_matrix = draw_call.matrix * self.camera.calculate_matrix();
-                self.matrix_uniform.update( total_matrix, &self.queue);
+            for (draw_call, uniform) in std::iter::zip(draw_calls.iter(), uniforms.iter()) {
 
                 let texture = &self.textures[draw_call.texture_id];
                 let mesh = &self.meshes[draw_call.mesh_id];
 
-                render_pass.set_bind_group(1, &self.matrix_uniform.bind_group, &[]);
+                render_pass.set_bind_group(1, &uniform.bind_group, &[]);
                 mesh.draw(texture, &mut render_pass);
             }
-
-            self.queue.submit(Some(encoder.finish()));
         }
+
+        self.queue.submit(Some(encoder.finish()));
 
         output.present();
 
