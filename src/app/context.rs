@@ -3,11 +3,11 @@ use std::fs::File;
 use std::io::Read;
 use wgpu::{PowerPreference, RequestAdapterOptions, StoreOp};
 use winit::window::Window;
-use crate::app::GameLogic;
+use crate::app::{GameLogic, texture};
 use crate::app::buffers::{Mesh, Vertex};
 use crate::app::camera::Camera;
 use crate::app::matrix::MatrixUniform;
-use crate::app::texture::Texture;
+use crate::app::texture::{DepthTexture, Texture};
 
 
 pub struct DrawCall {
@@ -49,7 +49,7 @@ impl<'a> Renderer<'a> {
         Some(self.context.textures.len() - 1)
     }
 
-    pub fn add_mesh(&mut self, vertices: &[Vertex], indices: &[u16]) -> Option<usize> {
+    pub fn add_mesh(&mut self, vertices: &[Vertex], indices: &[u16]) -> usize {
         let mesh = Mesh::new(
             &self.context.device,
             bytemuck::cast_slice(vertices),
@@ -57,7 +57,7 @@ impl<'a> Renderer<'a> {
         );
 
         self.context.meshes.push(mesh);
-        Some(self.context.meshes.len() - 1)
+        self.context.meshes.len() - 1
     }
 
     pub fn draw(&mut self, draw_call: DrawCall) {
@@ -74,10 +74,11 @@ pub struct Context {
     size: winit::dpi::PhysicalSize<u32>,
     pipeline: wgpu::RenderPipeline,
     pub camera: Camera,
-    matrix_uniform: MatrixUniform,
 
     meshes: Vec<Mesh>,
     textures: Vec<Texture>,
+
+    depth_texture: DepthTexture,
 }
 
 impl Context {
@@ -116,6 +117,8 @@ impl Context {
 
         let matrix_uniform = MatrixUniform::new(&device);
 
+        let depth_texture = DepthTexture::new(&device, &config, "depth texture");
+
         let pipeline = Context::create_render_pipeline(
             &device,
             &config,
@@ -142,9 +145,9 @@ impl Context {
             size,
             pipeline,
             camera,
-            matrix_uniform,
             meshes: vec![],
             textures: vec![],
+            depth_texture,
         }
     }
 
@@ -159,6 +162,11 @@ impl Context {
             self.config.height = new_size.height;
 
             self.surface.configure(&self.device, &self.config);
+            self.depth_texture = DepthTexture::new(
+                &self.device,
+                &self.config,
+                "depth texture"
+            );
         }
     }
 
@@ -184,50 +192,71 @@ impl Context {
 
         self.camera.aspect = self.config.width as f32 / self.config.height as f32;
 
-        for draw_call in draw_calls {
 
-            let mut encoder = self.device.create_command_encoder(
-                &wgpu::CommandEncoderDescriptor {
-                    label: Some("Render encoder")
-                }
-            );
+        let mut encoder = self.device.create_command_encoder(
+            &wgpu::CommandEncoderDescriptor {
+                label: Some("Render encoder")
+            }
+        );
 
-            {
-                let color_attachment = wgpu::RenderPassColorAttachment {
-                    view: &view,
-                    resolve_target: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
-                        store: StoreOp::Store,
+        {
+            let color_attachment = wgpu::RenderPassColorAttachment {
+                view: &view,
+                resolve_target: None,
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                    store: StoreOp::Store,
+                },
+            };
+
+            let depth_stencil_attachment = wgpu::RenderPassDepthStencilAttachment {
+                view: &self.depth_texture.view,
+                depth_ops: Some(
+                    wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(1.0),
+                        store: wgpu::StoreOp::Store,
                     },
-                };
+                ),
+                stencil_ops: None,
+            };
 
-                let descriptor = wgpu::RenderPassDescriptor {
-                    label: Some("Render Pass"),
-                    color_attachments: &[
-                        Some(color_attachment)
-                    ],
-                    depth_stencil_attachment: None,
-                    occlusion_query_set: None,
-                    timestamp_writes: None,
-                };
+            let descriptor = wgpu::RenderPassDescriptor {
+                label: Some("Render Pass"),
+                color_attachments: &[
+                    Some(color_attachment)
+                ],
+                depth_stencil_attachment: Some(depth_stencil_attachment),
+                occlusion_query_set: None,
+                timestamp_writes: None,
+            };
 
-                let mut render_pass = encoder.begin_render_pass(&descriptor);
-                render_pass.set_pipeline(&self.pipeline);
+            let mut uniforms = Vec::new();
+
+            for draw_call in draw_calls.iter() {
+                let total_matrix = self.camera.calculate_matrix() * draw_call.matrix;
+                let mut uniform = MatrixUniform::new(&self.device);
+                uniform.update(total_matrix, &self.queue);
+
+                uniforms.push(
+                    uniform
+                );
+            }
+
+            let mut render_pass = encoder.begin_render_pass(&descriptor);
+            render_pass.set_pipeline(&self.pipeline);
 
 
-                let total_matrix = draw_call.matrix * self.camera.calculate_matrix();
-                self.matrix_uniform.update( total_matrix, &self.queue);
+            for (draw_call, uniform) in std::iter::zip(draw_calls.iter(), uniforms.iter()) {
 
                 let texture = &self.textures[draw_call.texture_id];
                 let mesh = &self.meshes[draw_call.mesh_id];
 
-                render_pass.set_bind_group(1, &self.matrix_uniform.bind_group, &[]);
+                render_pass.set_bind_group(1, &uniform.bind_group, &[]);
                 mesh.draw(texture, &mut render_pass);
             }
-
-            self.queue.submit(Some(encoder.finish()));
         }
+
+        self.queue.submit(Some(encoder.finish()));
 
         output.present();
 
@@ -276,6 +305,14 @@ impl Context {
             conservative: false,
         };
 
+        let depth_stencil = wgpu::DepthStencilState {
+            format: DepthTexture::DEPTH_FORMAT,
+            depth_write_enabled: true,
+            depth_compare: wgpu::CompareFunction::Less,
+            stencil: wgpu::StencilState::default(),
+            bias: wgpu::DepthBiasState::default(),
+        };
+
         device.create_render_pipeline(
             &wgpu::RenderPipelineDescriptor {
                 label: Some("Render pipeline"),
@@ -283,7 +320,7 @@ impl Context {
                 vertex: vertex_state,
                 fragment: Some(fragment_state),
                 primitive: primitive_state,
-                depth_stencil: None,
+                depth_stencil: Some(depth_stencil),
                 multisample: wgpu::MultisampleState {
                     count: 1,
                     mask: !0,
