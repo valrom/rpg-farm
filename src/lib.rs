@@ -8,6 +8,7 @@ use winit::{
     event_loop::EventLoop,
     window::WindowBuilder,
 };
+use winit::keyboard::{KeyCode, PhysicalKey};
 use crate::app::buffers::{INDICES, VERTICES};
 use crate::app::context::{DrawCall, Renderer};
 use crate::app::GameLogic;
@@ -15,6 +16,7 @@ use crate::app::GameLogic;
 struct TestLogic {
     textures: Vec<usize>,
     mesh: usize,
+    size: i32,
 }
 
 impl TestLogic {
@@ -22,6 +24,7 @@ impl TestLogic {
         Self {
             textures: Vec::with_capacity(2),
             mesh: 0,
+            size: 0,
         }
     }
 }
@@ -45,9 +48,11 @@ impl GameLogic for TestLogic {
 
         const DISTANCE : f32 = 1.25;
 
-        for x in -3..=3 {
-            for y in -3..=3 {
-                for z in -3..=3 {
+        let size = self.size;
+
+        for x in -size..=size {
+            for y in -size..=size {
+                for z in -size..=size {
                     matrix.w = Vector4::new(
                         DISTANCE * x as f32,
                         DISTANCE * y as f32,
@@ -61,6 +66,16 @@ impl GameLogic for TestLogic {
                         matrix,
                     });
                 }
+            }
+        }
+    }
+
+    fn input(&mut self, inputs: Vec<PhysicalKey>) {
+        for input in inputs {
+            match input {
+                PhysicalKey::Code(KeyCode::KeyA) => self.size -= 1,
+                PhysicalKey::Code(KeyCode::KeyD) => self.size += 1,
+                _ => {},
             }
         }
     }

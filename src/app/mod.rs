@@ -18,7 +18,7 @@ use crate::app::context::Renderer;
 pub struct App<'a> {
     game_logic: &'a mut dyn GameLogic,
     context : Context,
-    pub camera_angles: cgmath::Point2<f32>,
+    inputs: Vec<PhysicalKey>,
 }
 
 
@@ -26,6 +26,8 @@ pub trait GameLogic {
     fn render<'a, 'b>(&'a mut self, renderer: &'b mut Renderer<'a>) where 'a : 'b;
 
     fn init<'a, 'b>(&'a mut self, renderer: &'b mut Renderer<'a>) where 'a : 'b;
+
+    fn input(&mut self, inputs: Vec<PhysicalKey>);
 }
 
 impl<'a> App<'a> {
@@ -37,7 +39,7 @@ impl<'a> App<'a> {
         Self {
             game_logic,
             context,
-            camera_angles: cgmath::Point2::new(0.0, 0.0),
+            inputs: Vec::new(),
         }
     }
 
@@ -54,7 +56,7 @@ impl<'a> App<'a> {
 
                 match event {
                     WindowEvent::RedrawRequested => {
-                        self.context.camera.set_angles(self.camera_angles);
+                        self.game_logic.input(std::mem::take(&mut self.inputs));
                         self.context.render(self.game_logic).unwrap();
                     },
 
@@ -93,6 +95,17 @@ impl<'a> App<'a> {
             },
 
             WindowEvent::CloseRequested => elwt.exit(),
+
+            WindowEvent::KeyboardInput {
+                event: KeyEvent {
+                    state: ElementState::Pressed,
+                    physical_key,
+                    ..
+                },
+                ..
+            } => {
+                self.inputs.push(physical_key);
+            }
             
             _ => {},
         }
@@ -100,32 +113,11 @@ impl<'a> App<'a> {
 
     fn handle_device_event(&mut self, event: DeviceEvent, _elwt: &EventLoopWindowTarget<()>) {
         match event {
-            DeviceEvent::MouseMotion {
-                delta
-            } => {
-                self.camera_angles += (delta.0 as f32 / 10.0, delta.1 as f32  / 10.0).into();
-            },
-
             _ => {}
         }
     }
     
-    fn input(&mut self, event: &WindowEvent) -> bool {
-
-        match event {
-            WindowEvent::KeyboardInput {
-                event: KeyEvent {
-                    physical_key: PhysicalKey::Code(KeyCode::Space),
-                    state: ElementState::Released,
-                    ..
-                },
-                ..
-            } => {
-                println!("Space pressed");
-                true
-            },
-
-            _ => false
-        }
+    fn input(&mut self, _event: &WindowEvent) -> bool {
+        false
     }
 }
