@@ -10,7 +10,7 @@ use winit::{
 };
 use winit::keyboard::{KeyCode, PhysicalKey};
 use crate::app::buffers::{INDICES, VERTICES};
-use crate::app::context::{DrawCall, Renderer};
+use crate::app::context::{DrawCall, DrawParams, Renderer};
 use crate::app::GameLogic;
 
 struct TestLogic {
@@ -60,9 +60,13 @@ impl GameLogic for TestLogic {
                         1.0,
                     );
 
-                    renderer.draw(DrawCall {
+                    let params = DrawParams {
                         mesh_id: self.mesh,
                         texture_id: self.textures[(x + y + z) as usize % self.textures.len()],
+                    };
+
+                    renderer.draw(DrawCall {
+                        params,
                         matrix,
                     });
                 }

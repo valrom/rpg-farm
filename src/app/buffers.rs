@@ -1,4 +1,3 @@
-use std::mem;
 use std::ops::Range;
 use wgpu::util::DeviceExt;
 use crate::app::texture::Texture;

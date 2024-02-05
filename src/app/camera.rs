@@ -30,6 +30,7 @@ impl Camera {
         OPENGL_TO_WGPU_MATRIX * proj * view
     }
 
+    #[allow(unused)]
     pub fn set_angles(&mut self, coords: cgmath::Point2<f32>) {
         const DISTANCE : f32 = 15.0;
 

@@ -5,29 +5,44 @@ use std::io::Read;
 use wgpu::{Buffer, PowerPreference, RequestAdapterOptions, StoreOp};
 use wgpu::util::DeviceExt;
 use winit::window::Window;
-use crate::app::{GameLogic, texture};
+use crate::app::GameLogic;
 use crate::app::buffers::{InstanceRaw, Mesh, Vertex};
 use crate::app::camera::Camera;
 use crate::app::matrix::MatrixUniform;
 use crate::app::texture::{DepthTexture, Texture};
 
-
-pub struct DrawCall {
+#[derive(Copy, Clone, PartialOrd, PartialEq, Hash, Eq)]
+pub struct DrawParams {
     pub mesh_id: usize,
     pub texture_id: usize,
+}
+
+pub struct DrawCall {
+    pub params: DrawParams,
     pub matrix: cgmath::Matrix4<f32>,
+}
+
+pub struct DrawCallInstanced {
+    pub params: DrawParams,
+    pub instances: Vec<cgmath::Matrix4<f32>>
+}
+
+pub struct RawDrawCallInstanced {
+    pub params: DrawParams,
+    pub buffer: Buffer,
+    pub range: u32,
 }
 
 pub struct Renderer<'a> {
     context: &'a mut Context,
-    pub instances: HashMap<(usize, usize), Vec<cgmath::Matrix4<f32>>>,
+    pub batches: HashMap<DrawParams, DrawCallInstanced>,
 }
 
 impl<'a> Renderer<'a> {
     fn new<'b>(context: &'b mut Context) -> Renderer<'a> where 'b : 'a {
         Renderer {
             context,
-            instances: HashMap::new(),
+            batches: HashMap::new(),
         }
     }
 
@@ -64,16 +79,19 @@ impl<'a> Renderer<'a> {
 
     pub fn draw(&mut self, draw_call: DrawCall) {
 
-        let key = (draw_call.texture_id, draw_call.mesh_id);
+        let key = draw_call.params;
 
-        if self.instances.contains_key(&key) {
-            self.instances.get_mut(&key)
+        if self.batches.contains_key(&key) {
+            self.batches.get_mut(&key)
                 .unwrap()
-                .push(draw_call.matrix);
+                .instances.push(draw_call.matrix);
         } else {
-            self.instances.insert(
+            self.batches.insert(
                 key,
-                vec![draw_call.matrix]
+                DrawCallInstanced {
+                    params: key,
+                    instances: vec![draw_call.matrix],
+                }
             );
         }
     }
@@ -92,7 +110,7 @@ pub struct Context {
     meshes: Vec<Mesh>,
     textures: Vec<Texture>,
 
-    draw_calls: Vec<(usize, usize, Buffer, u32)>,
+    draw_calls: Vec<RawDrawCallInstanced>,
 
     depth_texture: DepthTexture,
 }
@@ -193,30 +211,34 @@ impl Context {
 
     pub fn render(&mut self, game_logic: &mut dyn GameLogic) -> Result<(), wgpu::SurfaceError> {
 
-        let instances = {
+        let batches = {
             let mut renderer = Renderer::new(self);
             game_logic.render(&mut renderer);
-            renderer.instances
+            renderer.batches
         };
 
-        self.draw_calls = instances.into_iter()
-            .map( |((texture, mesh), matrices)| {
+        self.draw_calls = batches.values()
+            .map( |DrawCallInstanced { params, instances }| {
 
-                let range = matrices.len();
+                let range = instances.len() as u32;
 
-                let instance_data = matrices.into_iter()
-                    .map(|m| m.into())
+                let raw_instances = instances.into_iter()
+                    .map(|m| (*m).into())
                     .collect::<Vec<[[f32;4];4]>>();
 
-                let instance_buffer = self.device.create_buffer_init(
+                let buffer = self.device.create_buffer_init(
                     &wgpu::util::BufferInitDescriptor {
                         label: Some("Instance Buffer"),
-                        contents: bytemuck::cast_slice(&instance_data),
+                        contents: bytemuck::cast_slice(&raw_instances),
                         usage: wgpu::BufferUsages::VERTEX,
                     },
                 );
 
-                (texture, mesh, instance_buffer, range as u32)
+                RawDrawCallInstanced {
+                    params: *params,
+                    buffer,
+                    range,
+                }
             })
             .collect();
 
@@ -275,12 +297,12 @@ impl Context {
 
 
             for draw_call in &self.draw_calls {
-                let texture = &self.textures[draw_call.0];
-                let mesh = &self.meshes[draw_call.1];
+                let texture = &self.textures[draw_call.params.texture_id];
+                let mesh = &self.meshes[draw_call.params.mesh_id];
 
-                render_pass.set_vertex_buffer(1, draw_call.2.slice(..));
+                render_pass.set_vertex_buffer(1, draw_call.buffer.slice(..));
                 render_pass.set_bind_group(1, &camera_uniform.bind_group, &[]);
-                mesh.draw(texture, &mut render_pass, 0..draw_call.3);
+                mesh.draw(texture, &mut render_pass, 0..draw_call.range);
             }
         }
 
