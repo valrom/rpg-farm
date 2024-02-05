@@ -9,7 +9,7 @@ use winit::{
     event_loop::EventLoopWindowTarget,
     window::Window,
 };
-use winit::keyboard::{KeyCode, PhysicalKey};
+use winit::keyboard::PhysicalKey;
 
 use context::Context;
 use crate::app::context::Renderer;

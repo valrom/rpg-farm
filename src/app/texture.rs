@@ -136,6 +136,7 @@ impl Texture {
     }
 }
 
+#[allow(unused)]
 pub struct DepthTexture {
     texture: wgpu::Texture,
     pub view: wgpu::TextureView,
